@@ -1,4 +1,4 @@
-# Copyright (C) 2018-2019 Intel Corporation
+# Copyright (C) 2018-2020 Intel Corporation
 #
 # SPDX-License-Identifier: MIT
 
@@ -50,10 +50,22 @@ def generate_ssh_keys():
     ssh_dir = '{}/.ssh'.format(os.getenv('HOME'))
     pidfile = os.path.join(ssh_dir, 'ssh.pid')
 
+    def add_ssh_keys():
+        IGNORE_FILES = ('README.md', 'ssh.pid')
+        keys_to_add = [entry.name for entry in os.scandir(ssh_dir) if entry.name not in IGNORE_FILES]
+        keys_to_add = ' '.join(os.path.join(ssh_dir, f) for f in keys_to_add)
+        subprocess.run(['ssh-add {}'.format(keys_to_add)],
+            shell = True,
+            stderr = subprocess.PIPE,
+            # lets set the timeout if ssh-add requires a input passphrase for key
+            # otherwise the process will be freezed
+            timeout=30,
+            )
+
     with open(pidfile, "w") as pid:
         fcntl.flock(pid, fcntl.LOCK_EX)
         try:
-            subprocess.run(['ssh-add {}/*'.format(ssh_dir)], shell = True, stderr = subprocess.PIPE)
+            add_ssh_keys()
             keys = subprocess.run(['ssh-add -l'], shell = True,
                 stdout = subprocess.PIPE).stdout.decode('utf-8').split('\n')
             if 'has no identities' in keys[0]:
@@ -93,9 +105,10 @@ INSTALLED_APPS = [
     'cvat.apps.documentation',
     'cvat.apps.dataset_manager',
     'cvat.apps.engine',
-    'cvat.apps.git',
+    'cvat.apps.dataset_repo',
     'cvat.apps.restrictions',
     'cvat.apps.lambda_manager',
+    'cvat.apps.opencv',
     'django_rq',
     'compressor',
     'cacheops',
@@ -334,6 +347,9 @@ os.makedirs(CACHE_ROOT, exist_ok=True)
 TASKS_ROOT = os.path.join(DATA_ROOT, 'tasks')
 os.makedirs(TASKS_ROOT, exist_ok=True)
 
+PROJECTS_ROOT = os.path.join(DATA_ROOT, 'projects')
+os.makedirs(PROJECTS_ROOT, exist_ok=True)
+
 SHARE_ROOT = os.path.join(BASE_DIR, 'share')
 os.makedirs(SHARE_ROOT, exist_ok=True)
 
@@ -415,6 +431,9 @@ RESTRICTIONS = {
     # this setting limits the number of tasks for the user
     'task_limit': None,
 
+    # this setting limits the number of projects for the user
+    'project_limit': None,
+
     # this setting reduse task visibility to owner and assignee only
     'reduce_task_visibility': False,
 
@@ -440,3 +459,4 @@ CACHES = {
 }
 
 USE_CACHE = True
+

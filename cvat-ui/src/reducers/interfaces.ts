@@ -1,10 +1,12 @@
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: MIT
 
 import { ExtendedKeyMapOptions } from 'react-hotkeys';
 import { Canvas, RectDrawingMethod } from 'cvat-canvas-wrapper';
+import { IntelligentScissors } from 'utils/opencv-wrapper/intelligent-scissors';
 import { MutableRefObject } from 'react';
+import { Canvas3d } from 'cvat-canvas3d/src/typescript/canvas3d';
 
 export type StringObject = {
     [index: string]: string;
@@ -19,6 +21,35 @@ export interface AuthState {
     showChangePasswordDialog: boolean;
     allowChangePassword: boolean;
     allowResetPassword: boolean;
+}
+
+export interface ProjectsQuery {
+    page: number;
+    id: number | null;
+    search: string | null;
+    owner: string | null;
+    name: string | null;
+    status: string | null;
+    [key: string]: string | number | null | undefined;
+}
+
+export type Project = any;
+
+export interface ProjectsState {
+    initialized: boolean;
+    fetching: boolean;
+    count: number;
+    current: Project[];
+    gettingQuery: ProjectsQuery;
+    activities: {
+        creates: {
+            id: null | number;
+            error: string;
+        };
+        deletes: {
+            [projectId: number]: boolean; // deleted (deleting if in dictionary)
+        };
+    };
 }
 
 export interface TasksQuery {
@@ -76,7 +107,6 @@ export interface FormatsState {
     initialized: boolean;
 }
 
-// eslint-disable-next-line import/prefer-default-export
 export enum SupportedPlugins {
     GIT_INTEGRATION = 'GIT_INTEGRATION',
     ANALYTICS = 'ANALYTICS',
@@ -91,12 +121,6 @@ export interface PluginsState {
     fetching: boolean;
     initialized: boolean;
     list: PluginsList;
-}
-
-export interface UsersState {
-    users: any[];
-    fetching: boolean;
-    initialized: boolean;
 }
 
 export interface AboutState {
@@ -123,7 +147,8 @@ export interface UserAgreementsState {
     initialized: boolean;
 }
 
-export interface ShareFileInfo { // get this data from cvat-core
+export interface ShareFileInfo {
+    // get this data from cvat-core
     name: string;
     type: 'DIR' | 'REG';
 }
@@ -146,8 +171,15 @@ export interface Model {
     description: string;
     type: string;
     params: {
-        canvas: object;
+        canvas: Record<string, unknown>;
     };
+}
+
+export type OpenCVTool = IntelligentScissors;
+export enum TaskStatus {
+    ANNOTATION = 'annotation',
+    REVIEW = 'validation',
+    COMPLETED = 'completed',
 }
 
 export enum RQStatus {
@@ -183,6 +215,7 @@ export interface ModelsState {
 export interface ErrorState {
     message: string;
     reason: string;
+    className?: string;
 }
 
 export interface NotificationsState {
@@ -196,6 +229,12 @@ export interface NotificationsState {
             requestPasswordReset: null | ErrorState;
             resetPassword: null | ErrorState;
             loadAuthActions: null | ErrorState;
+        };
+        projects: {
+            fetching: null | ErrorState;
+            updating: null | ErrorState;
+            deleting: null | ErrorState;
+            creating: null | ErrorState;
         };
         tasks: {
             fetching: null | ErrorState;
@@ -254,6 +293,14 @@ export interface NotificationsState {
         userAgreements: {
             fetching: null | ErrorState;
         };
+        review: {
+            initialization: null | ErrorState;
+            finishingIssue: null | ErrorState;
+            resolvingIssue: null | ErrorState;
+            reopeningIssue: null | ErrorState;
+            commentingIssue: null | ErrorState;
+            submittingReview: null | ErrorState;
+        };
     };
     messages: {
         tasks: {
@@ -284,7 +331,10 @@ export enum ActiveControl {
     GROUP = 'group',
     SPLIT = 'split',
     EDIT = 'edit',
+    OPEN_ISSUE = 'open_issue',
     AI_TOOLS = 'ai_tools',
+    PHOTO_CONTEXT = 'PHOTO_CONTEXT',
+    OPENCV_TOOLS = 'opencv_tools',
 }
 
 export enum ShapeType {
@@ -331,8 +381,9 @@ export interface AnnotationState {
             left: number;
             type: ContextMenuType;
             pointID: number | null;
+            clientID: number | null;
         };
-        instance: Canvas;
+        instance: Canvas | Canvas3d;
         ready: boolean;
         activeControl: ActiveControl;
     };
@@ -355,9 +406,14 @@ export interface AnnotationState {
         };
         playing: boolean;
         frameAngles: number[];
+        contextImage: {
+            loaded: boolean;
+            data: string;
+            hidden: boolean;
+        };
     };
     drawing: {
-        activeInteractor?: Model;
+        activeInteractor?: Model | OpenCVTool;
         activeShapeType: ShapeType;
         activeRectDrawingMethod?: RectDrawingMethod;
         activeNumOfPoints?: number;
@@ -380,6 +436,7 @@ export interface AnnotationState {
             redo: [string, number][];
         };
         saving: {
+            forceExit: boolean;
             uploading: boolean;
             statuses: string[];
         };
@@ -399,6 +456,8 @@ export interface AnnotationState {
         data: any;
     };
     colors: any[];
+    requestReviewDialogVisible: boolean;
+    submitReviewDialogVisible: boolean;
     sidebarCollapsed: boolean;
     appearanceCollapsed: boolean;
     tabContentHeight: number;
@@ -407,9 +466,11 @@ export interface AnnotationState {
 }
 
 export enum Workspace {
+    STANDARD3D = 'Standard 3D',
     STANDARD = 'Standard',
     ATTRIBUTE_ANNOTATION = 'Attribute annotation',
     TAG_ANNOTATION = 'Tag annotation',
+    REVIEW_WORKSPACE = 'Review',
 }
 
 export enum GridColor {
@@ -482,18 +543,30 @@ export interface ShortcutsState {
     normalizedKeyMap: Record<string, string>;
 }
 
-export interface MetaState {
-    initialized: boolean;
-    fetching: boolean;
-    showTasksButton: boolean;
-    showAnalyticsButton: boolean;
-    showModelsButton: boolean;
+export enum ReviewStatus {
+    ACCEPTED = 'accepted',
+    REJECTED = 'rejected',
+    REVIEW_FURTHER = 'review_further',
+}
+
+export interface ReviewState {
+    reviews: any[];
+    issues: any[];
+    frameIssues: any[];
+    latestComments: string[];
+    activeReview: any | null;
+    newIssuePosition: number[] | null;
+    issuesHidden: boolean;
+    fetching: {
+        reviewId: number | null;
+        issueId: number | null;
+    };
 }
 
 export interface CombinedState {
     auth: AuthState;
+    projects: ProjectsState;
     tasks: TasksState;
-    users: UsersState;
     about: AboutState;
     share: ShareState;
     formats: FormatsState;
@@ -504,5 +577,10 @@ export interface CombinedState {
     annotation: AnnotationState;
     settings: SettingsState;
     shortcuts: ShortcutsState;
-    meta: MetaState;
+    review: ReviewState;
+}
+
+export enum DimensionType {
+    DIM_3D = '3d',
+    DIM_2D = '2d',
 }

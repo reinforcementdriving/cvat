@@ -1,13 +1,13 @@
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: MIT
 
 import React from 'react';
-
 import { Col } from 'antd/lib/grid';
-import Icon from 'antd/lib/icon';
-import Tooltip from 'antd/lib/tooltip';
+import Icon from '@ant-design/icons';
 import Popover from 'antd/lib/popover';
+
+import CVATTooltip from 'components/common/cvat-tooltip';
 
 import {
     FirstIcon,
@@ -75,37 +75,47 @@ function PlayerButtons(props: Props): JSX.Element {
     let prevButton = <Icon className='cvat-player-previous-button' component={PreviousIcon} onClick={onPrevFrame} />;
     let prevButtonTooltipMessage = prevRegularText;
     if (prevButtonType === 'filtered') {
-        prevButton = <Icon className='cvat-player-previous-button' component={PreviousFilteredIcon} onClick={onPrevFrame} />;
+        prevButton = (
+            <Icon
+                className='cvat-player-previous-button-filtered'
+                component={PreviousFilteredIcon}
+                onClick={onPrevFrame}
+            />
+        );
         prevButtonTooltipMessage = prevFilteredText;
     } else if (prevButtonType === 'empty') {
-        prevButton = <Icon className='cvat-player-previous-button' component={PreviousEmptyIcon} onClick={onPrevFrame} />;
+        prevButton = (
+            <Icon className='cvat-player-previous-button-empty' component={PreviousEmptyIcon} onClick={onPrevFrame} />
+        );
         prevButtonTooltipMessage = prevEmptyText;
     }
 
     let nextButton = <Icon className='cvat-player-next-button' component={NextIcon} onClick={onNextFrame} />;
     let nextButtonTooltipMessage = nextRegularText;
     if (nextButtonType === 'filtered') {
-        nextButton = <Icon className='cvat-player-previous-button' component={NextFilteredIcon} onClick={onNextFrame} />;
+        nextButton = (
+            <Icon className='cvat-player-next-button-filtered' component={NextFilteredIcon} onClick={onNextFrame} />
+        );
         nextButtonTooltipMessage = nextFilteredText;
     } else if (nextButtonType === 'empty') {
-        nextButton = <Icon className='cvat-player-previous-button' component={NextEmptyIcon} onClick={onNextFrame} />;
+        nextButton = <Icon className='cvat-player-next-button-empty' component={NextEmptyIcon} onClick={onNextFrame} />;
         nextButtonTooltipMessage = nextEmptyText;
     }
 
     return (
         <Col className='cvat-player-buttons'>
-            <Tooltip title='Go to the first frame' mouseLeaveDelay={0}>
+            <CVATTooltip title='Go to the first frame'>
                 <Icon className='cvat-player-first-button' component={FirstIcon} onClick={onFirstFrame} />
-            </Tooltip>
-            <Tooltip title={`Go back with a step ${backwardShortcut}`} mouseLeaveDelay={0}>
+            </CVATTooltip>
+            <CVATTooltip title={`Go back with a step ${backwardShortcut}`}>
                 <Icon className='cvat-player-backward-button' component={BackJumpIcon} onClick={onBackward} />
-            </Tooltip>
+            </CVATTooltip>
             <Popover
                 trigger='contextMenu'
                 placement='bottom'
                 content={(
                     <>
-                        <Tooltip title={`${prevRegularText}`} mouseLeaveDelay={0}>
+                        <CVATTooltip title={`${prevRegularText}`}>
                             <Icon
                                 className='cvat-player-previous-inlined-button'
                                 component={PreviousIcon}
@@ -113,8 +123,8 @@ function PlayerButtons(props: Props): JSX.Element {
                                     setPrevButton('regular');
                                 }}
                             />
-                        </Tooltip>
-                        <Tooltip title={`${prevFilteredText}`} mouseLeaveDelay={0}>
+                        </CVATTooltip>
+                        <CVATTooltip title={`${prevFilteredText}`}>
                             <Icon
                                 className='cvat-player-previous-filtered-inlined-button'
                                 component={PreviousFilteredIcon}
@@ -122,8 +132,8 @@ function PlayerButtons(props: Props): JSX.Element {
                                     setPrevButton('filtered');
                                 }}
                             />
-                        </Tooltip>
-                        <Tooltip title={`${prevEmptyText}`} mouseLeaveDelay={0}>
+                        </CVATTooltip>
+                        <CVATTooltip title={`${prevEmptyText}`}>
                             <Icon
                                 className='cvat-player-previous-empty-inlined-button'
                                 component={PreviousEmptyIcon}
@@ -131,41 +141,31 @@ function PlayerButtons(props: Props): JSX.Element {
                                     setPrevButton('empty');
                                 }}
                             />
-                        </Tooltip>
+                        </CVATTooltip>
                     </>
                 )}
             >
-                <Tooltip placement='top' mouseLeaveDelay={0} title={`${prevButtonTooltipMessage} ${previousFrameShortcut}`}>
+                <CVATTooltip placement='top' title={`${prevButtonTooltipMessage} ${previousFrameShortcut}`}>
                     {prevButton}
-                </Tooltip>
+                </CVATTooltip>
             </Popover>
 
-            {!playing
-                ? (
-                    <Tooltip title={`Play ${playPauseShortcut}`} mouseLeaveDelay={0}>
-                        <Icon
-                            className='cvat-player-play-button'
-                            component={PlayIcon}
-                            onClick={onSwitchPlay}
-                        />
-                    </Tooltip>
-                )
-                : (
-                    <Tooltip title={`Pause ${playPauseShortcut}`} mouseLeaveDelay={0}>
-                        <Icon
-                            className='cvat-player-pause-button'
-                            component={PauseIcon}
-                            onClick={onSwitchPlay}
-                        />
-                    </Tooltip>
-                )}
+            {!playing ? (
+                <CVATTooltip title={`Play ${playPauseShortcut}`}>
+                    <Icon className='cvat-player-play-button' component={PlayIcon} onClick={onSwitchPlay} />
+                </CVATTooltip>
+            ) : (
+                <CVATTooltip title={`Pause ${playPauseShortcut}`}>
+                    <Icon className='cvat-player-pause-button' component={PauseIcon} onClick={onSwitchPlay} />
+                </CVATTooltip>
+            )}
 
             <Popover
                 trigger='contextMenu'
                 placement='bottom'
                 content={(
                     <>
-                        <Tooltip title={`${nextRegularText}`} mouseLeaveDelay={0}>
+                        <CVATTooltip title={`${nextRegularText}`}>
                             <Icon
                                 className='cvat-player-next-inlined-button'
                                 component={NextIcon}
@@ -173,8 +173,8 @@ function PlayerButtons(props: Props): JSX.Element {
                                     setNextButton('regular');
                                 }}
                             />
-                        </Tooltip>
-                        <Tooltip title={`${nextFilteredText}`} mouseLeaveDelay={0}>
+                        </CVATTooltip>
+                        <CVATTooltip title={`${nextFilteredText}`}>
                             <Icon
                                 className='cvat-player-next-filtered-inlined-button'
                                 component={NextFilteredIcon}
@@ -182,8 +182,8 @@ function PlayerButtons(props: Props): JSX.Element {
                                     setNextButton('filtered');
                                 }}
                             />
-                        </Tooltip>
-                        <Tooltip title={`${nextEmptyText}`} mouseLeaveDelay={0}>
+                        </CVATTooltip>
+                        <CVATTooltip title={`${nextEmptyText}`}>
                             <Icon
                                 className='cvat-player-next-empty-inlined-button'
                                 component={NextEmptyIcon}
@@ -191,20 +191,20 @@ function PlayerButtons(props: Props): JSX.Element {
                                     setNextButton('empty');
                                 }}
                             />
-                        </Tooltip>
+                        </CVATTooltip>
                     </>
                 )}
             >
-                <Tooltip placement='top' mouseLeaveDelay={0} title={`${nextButtonTooltipMessage} ${nextFrameShortcut}`}>
+                <CVATTooltip placement='top' title={`${nextButtonTooltipMessage} ${nextFrameShortcut}`}>
                     {nextButton}
-                </Tooltip>
+                </CVATTooltip>
             </Popover>
-            <Tooltip title={`Go next with a step ${forwardShortcut}`} mouseLeaveDelay={0}>
+            <CVATTooltip title={`Go next with a step ${forwardShortcut}`}>
                 <Icon className='cvat-player-forward-button' component={ForwardJumpIcon} onClick={onForward} />
-            </Tooltip>
-            <Tooltip title='Go to the last frame' mouseLeaveDelay={0}>
+            </CVATTooltip>
+            <CVATTooltip title='Go to the last frame'>
                 <Icon className='cvat-player-last-button' component={LastIcon} onClick={onLastFrame} />
-            </Tooltip>
+            </CVATTooltip>
         </Col>
     );
 }

@@ -1,5 +1,5 @@
 metadata:
-  name: openvino.dextr
+  name: openvino-dextr
   namespace: cvat
   annotations:
     name: DEXTR
@@ -10,12 +10,12 @@ metadata:
 
 spec:
   description: Deep Extreme Cut
-  runtime: "python:3.6"
+  runtime: 'python:3.6'
   handler: main:handler
   eventTimeout: 30s
   env:
     - name: NUCLIO_PYTHON_EXE_PATH
-      value: /opt/nuclio/common/python3
+      value: /opt/nuclio/common/openvino/python3
 
   build:
     image: cvat/openvino.dextr
@@ -23,25 +23,25 @@ spec:
 
     directives:
       preCopy:
-      - kind: USER
-        value: root
-      - kind: WORKDIR
-        value: /opt/nuclio
-      - kind: RUN
-        value: ln -s /usr/bin/pip3 /usr/bin/pip
+        - kind: USER
+          value: root
+        - kind: WORKDIR
+          value: /opt/nuclio
+        - kind: RUN
+          value: ln -s /usr/bin/pip3 /usr/bin/pip
 
       postCopy:
-      - kind: RUN
-        value: curl -O https://download.01.org/openvinotoolkit/models_contrib/cvat/dextr_model_v1.zip
-      - kind: RUN
-        value: unzip dextr_model_v1.zip
-      - kind: RUN
-        value: pip3 install Pillow
+        - kind: RUN
+          value: curl -O https://download.01.org/openvinotoolkit/models_contrib/cvat/dextr_model_v1.zip
+        - kind: RUN
+          value: unzip dextr_model_v1.zip
+        - kind: RUN
+          value: pip3 install Pillow
 
   triggers:
     myHttpTrigger:
       maxWorkers: 2
-      kind: "http"
+      kind: 'http'
       workerAvailabilityTimeoutMilliseconds: 10000
       attributes:
         maxRequestBodySize: 33554432 # 32MB
@@ -51,3 +51,4 @@ spec:
       restartPolicy:
         name: always
         maximumRetryCount: 3
+      mountMode: volume

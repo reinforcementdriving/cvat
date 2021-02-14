@@ -1,14 +1,14 @@
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: MIT
 
 import React from 'react';
-import Icon from 'antd/lib/icon';
-import Tooltip from 'antd/lib/tooltip';
+import Icon from '@ant-design/icons';
 
 import { MoveIcon } from 'icons';
 import { ActiveControl } from 'reducers/interfaces';
 import { Canvas } from 'cvat-canvas-wrapper';
+import CVATTooltip from 'components/common/cvat-tooltip';
 
 interface Props {
     canvasInstance: Canvas;
@@ -19,11 +19,14 @@ function MoveControl(props: Props): JSX.Element {
     const { canvasInstance, activeControl } = props;
 
     return (
-        <Tooltip title='Move the image' placement='right' mouseLeaveDelay={0}>
+        <CVATTooltip title='Move the image' placement='right'>
             <Icon
                 component={MoveIcon}
-                className={activeControl === ActiveControl.DRAG_CANVAS
-                    ? 'cvat-move-control cvat-active-canvas-control' : 'cvat-move-control'}
+                className={
+                    activeControl === ActiveControl.DRAG_CANVAS ?
+                        'cvat-move-control cvat-active-canvas-control' :
+                        'cvat-move-control'
+                }
                 onClick={(): void => {
                     if (activeControl === ActiveControl.DRAG_CANVAS) {
                         canvasInstance.dragCanvas(false);
@@ -33,7 +36,7 @@ function MoveControl(props: Props): JSX.Element {
                     }
                 }}
             />
-        </Tooltip>
+        </CVATTooltip>
     );
 }
 

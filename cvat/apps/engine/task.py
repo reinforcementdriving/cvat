@@ -14,10 +14,11 @@ from urllib import error as urlerror
 from urllib import parse as urlparse
 from urllib import request as urlrequest
 
-from cvat.apps.engine.media_extractors import get_mime, MEDIA_TYPES, Mpeg4ChunkWriter, ZipChunkWriter, Mpeg4CompressedChunkWriter, ZipCompressedChunkWriter
-from cvat.apps.engine.models import DataChoice, StorageMethodChoice
+from cvat.apps.engine.media_extractors import get_mime, MEDIA_TYPES, Mpeg4ChunkWriter, ZipChunkWriter, Mpeg4CompressedChunkWriter, ZipCompressedChunkWriter, ValidateDimension
+from cvat.apps.engine.models import DataChoice, StorageMethodChoice, StorageChoice, RelatedFile
 from cvat.apps.engine.utils import av_scan_paths
 from cvat.apps.engine.prepare import prepare_meta
+from cvat.apps.engine.models import DimensionType
 
 import django_rq
 from django.conf import settings
@@ -232,7 +233,10 @@ def _create_thread(tid, data):
             "File with meta information can be uploaded if 'Use cache' option is also selected"
 
     if data['server_files']:
-        _copy_data_from_share(data['server_files'], upload_dir)
+        if db_data.storage == StorageChoice.LOCAL:
+            _copy_data_from_share(data['server_files'], upload_dir)
+        else:
+            upload_dir = settings.SHARE_ROOT
 
     av_scan_paths(upload_dir)
 
@@ -247,14 +251,34 @@ def _create_thread(tid, data):
         if media_files:
             if extractor is not None:
                 raise Exception('Combined data types are not supported')
+            source_paths=[os.path.join(upload_dir, f) for f in media_files]
+            if media_type in  ('archive', 'zip') and db_data.storage == StorageChoice.SHARE:
+                source_paths.append(db_data.get_upload_dirname())
             extractor = MEDIA_TYPES[media_type]['extractor'](
-                source_path=[os.path.join(upload_dir, f) for f in media_files],
+                source_path=source_paths,
                 step=db_data.get_frame_step(),
                 start=db_data.start_frame,
                 stop=data['stop_frame'],
             )
+
+    validate_dimension = ValidateDimension()
     if extractor.__class__ == MEDIA_TYPES['zip']['extractor']:
         extractor.extract()
+        validate_dimension.set_path(os.path.split(extractor.get_zip_filename())[0])
+        validate_dimension.validate()
+        if validate_dimension.dimension == DimensionType.DIM_3D:
+            db_task.dimension = DimensionType.DIM_3D
+
+            extractor.reconcile(
+                source_files=list(validate_dimension.related_files.keys()),
+                step=db_data.get_frame_step(),
+                start=db_data.start_frame,
+                stop=data['stop_frame'],
+                dimension=DimensionType.DIM_3D,
+
+            )
+            extractor.add_files(validate_dimension.converted_files)
+
     db_task.mode = task_mode
     db_data.compressed_chunk_type = models.DataChoice.VIDEO if task_mode == 'interpolation' and not data['use_zip_chunks'] else models.DataChoice.IMAGESET
     db_data.original_chunk_type = models.DataChoice.VIDEO if task_mode == 'interpolation' else models.DataChoice.IMAGESET
@@ -276,7 +300,10 @@ def _create_thread(tid, data):
     compressed_chunk_writer_class = Mpeg4CompressedChunkWriter if db_data.compressed_chunk_type == DataChoice.VIDEO else ZipCompressedChunkWriter
     original_chunk_writer_class = Mpeg4ChunkWriter if db_data.original_chunk_type == DataChoice.VIDEO else ZipChunkWriter
 
-    compressed_chunk_writer = compressed_chunk_writer_class(db_data.image_quality)
+    kwargs = {}
+    if validate_dimension.dimension == DimensionType.DIM_3D:
+        kwargs["dimension"] = validate_dimension.dimension
+    compressed_chunk_writer = compressed_chunk_writer_class(db_data.image_quality, **kwargs)
     original_chunk_writer = original_chunk_writer_class(100)
 
     # calculate chunk size if it isn't specified
@@ -294,6 +321,7 @@ def _create_thread(tid, data):
 
     if settings.USE_CACHE and db_data.storage_method == StorageMethodChoice.CACHE:
        for media_type, media_files in media.items():
+
             if not media_files:
                 continue
 
@@ -302,13 +330,9 @@ def _create_thread(tid, data):
                     if meta_info_file:
                         try:
                             from cvat.apps.engine.prepare import UploadedMeta
-                            if os.path.split(meta_info_file[0])[0]:
-                                os.replace(
-                                    os.path.join(upload_dir, meta_info_file[0]),
-                                    db_data.get_meta_path()
-                                )
                             meta_info = UploadedMeta(source_path=os.path.join(upload_dir, media_files[0]),
-                                                     meta_path=db_data.get_meta_path())
+                                                     meta_path=db_data.get_meta_path(),
+                                                     uploaded_meta=os.path.join(upload_dir, meta_info_file[0]))
                             meta_info.check_seek_key_frames()
                             meta_info.check_frames_numbers()
                             meta_info.save_meta_info()
@@ -321,6 +345,7 @@ def _create_thread(tid, data):
                             meta_info, smooth_decoding = prepare_meta(
                                 media_file=media_files[0],
                                 upload_dir=upload_dir,
+                                meta_dir=os.path.dirname(db_data.get_meta_path()),
                                 chunk_size=db_data.chunk_size
                             )
                             assert smooth_decoding == True, 'Too few keyframes for smooth video decoding.'
@@ -328,6 +353,7 @@ def _create_thread(tid, data):
                         meta_info, smooth_decoding = prepare_meta(
                             media_file=media_files[0],
                             upload_dir=upload_dir,
+                            meta_dir=os.path.dirname(db_data.get_meta_path()),
                             chunk_size=db_data.chunk_size
                         )
                         assert smooth_decoding == True, 'Too few keyframes for smooth video decoding.'
@@ -353,7 +379,7 @@ def _create_thread(tid, data):
                     img_sizes = []
                     with open(db_data.get_dummy_chunk_path(chunk_number), 'w') as dummy_chunk:
                         for path, frame_id in chunk_paths:
-                            dummy_chunk.write(path + '\n')
+                            dummy_chunk.write(os.path.relpath(path, upload_dir) + '\n')
                             img_sizes.append(extractor.get_image_size(frame_id))
 
                     db_images.extend([
@@ -394,7 +420,27 @@ def _create_thread(tid, data):
             update_progress(progress)
 
     if db_task.mode == 'annotation':
-        models.Image.objects.bulk_create(db_images)
+        if validate_dimension.dimension == DimensionType.DIM_2D:
+            models.Image.objects.bulk_create(db_images)
+        else:
+            related_file = []
+            for image_data in db_images:
+                image_model = models.Image(
+                    data=image_data.data,
+                    path=image_data.path,
+                    frame=image_data.frame,
+                    width=image_data.width,
+                    height=image_data.height
+                )
+
+                image_model.save()
+                image_data = models.Image.objects.get(id=image_model.id)
+
+                if validate_dimension.related_files.get(image_data.path, None):
+                    for related_image_file in validate_dimension.related_files[image_data.path]:
+                        related_file.append(
+                            RelatedFile(data=db_data, primary_image_id=image_data.id, path=related_image_file))
+            RelatedFile.objects.bulk_create(related_file)
         db_images = []
     else:
         models.Video.objects.create(

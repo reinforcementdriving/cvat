@@ -25,11 +25,25 @@ interface TaskPageComponentProps {
     getTask: () => void;
 }
 
-type Props = TaskPageComponentProps & RouteComponentProps<{id: string}>;
+type Props = TaskPageComponentProps & RouteComponentProps<{ id: string }>;
 
 class TaskPageComponent extends React.PureComponent<Props> {
+    public componentDidMount(): void {
+        const { task, fetching, getTask } = this.props;
+
+        if (task === null && !fetching) {
+            getTask();
+        }
+    }
+
     public componentDidUpdate(): void {
-        const { deleteActivity, history } = this.props;
+        const {
+            deleteActivity, history, task, fetching, getTask,
+        } = this.props;
+
+        if (task === null && !fetching) {
+            getTask();
+        }
 
         if (deleteActivity) {
             history.replace('/tasks');
@@ -37,24 +51,13 @@ class TaskPageComponent extends React.PureComponent<Props> {
     }
 
     public render(): JSX.Element {
-        const {
-            task,
-            fetching,
-            updating,
-            getTask,
-        } = this.props;
+        const { task, updating } = this.props;
 
-        if (task === null || updating) {
-            if (task === null && !fetching) {
-                getTask();
-            }
-
-            return (
-                <Spin size='large' className='cvat-spinner' />
-            );
+        if (task === null) {
+            return <Spin size='large' className='cvat-spinner' />;
         }
 
-        if (typeof (task) === 'undefined') {
+        if (typeof task === 'undefined') {
             return (
                 <Result
                     className='cvat-not-found'
@@ -67,14 +70,20 @@ class TaskPageComponent extends React.PureComponent<Props> {
 
         return (
             <>
-                <Row type='flex' justify='center' align='top' className='cvat-task-details-wrapper'>
+                <Row
+                    style={{ display: updating ? 'none' : undefined }}
+                    justify='center'
+                    align='top'
+                    className='cvat-task-details-wrapper'
+                >
                     <Col md={22} lg={18} xl={16} xxl={14}>
                         <TopBarComponent taskInstance={(task as Task).instance} />
-                        <DetailsContainer task={(task as Task)} />
-                        <JobListContainer task={(task as Task)} />
+                        <DetailsContainer task={task as Task} />
+                        <JobListContainer task={task as Task} />
                     </Col>
                 </Row>
                 <ModelRunnerModal />
+                {updating && <Spin size='large' className='cvat-spinner' />}
             </>
         );
     }

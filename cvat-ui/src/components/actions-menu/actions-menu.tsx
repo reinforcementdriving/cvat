@@ -4,12 +4,14 @@
 
 import './styles.scss';
 import React from 'react';
-import Menu, { ClickParam } from 'antd/lib/menu';
+import Menu from 'antd/lib/menu';
 import Modal from 'antd/lib/modal';
-
+// eslint-disable-next-line import/no-extraneous-dependencies
+import { MenuInfo } from 'rc-menu/lib/interface';
 import DumpSubmenu from './dump-submenu';
 import LoadSubmenu from './load-submenu';
 import ExportSubmenu from './export-submenu';
+import { DimensionType } from '../../reducers/interfaces';
 
 interface Props {
     taskID: number;
@@ -21,8 +23,8 @@ interface Props {
     dumpActivities: string[] | null;
     exportActivities: string[] | null;
     inferenceIsActive: boolean;
-
-    onClickMenu: (params: ClickParam, file?: File) => void;
+    taskDimension: DimensionType;
+    onClickMenu: (params: MenuInfo, file?: File) => void;
 }
 
 export enum Actions {
@@ -46,10 +48,11 @@ export default function ActionsMenuComponent(props: Props): JSX.Element {
         dumpActivities,
         exportActivities,
         loadActivity,
+        taskDimension,
     } = props;
 
-    let latestParams: ClickParam | null = null;
-    function onClickMenuWrapper(params: ClickParam | null, file?: File): void {
+    let latestParams: MenuInfo | null = null;
+    function onClickMenuWrapper(params: MenuInfo | null, file?: File): void {
         const copyParams = params || latestParams;
         if (!copyParams) {
             return;
@@ -67,7 +70,8 @@ export default function ActionsMenuComponent(props: Props): JSX.Element {
                             onClickMenu(copyParams, file);
                         },
                         okButtonProps: {
-                            type: 'danger',
+                            type: 'primary',
+                            danger: true,
                         },
                         okText: 'Update',
                     });
@@ -79,11 +83,13 @@ export default function ActionsMenuComponent(props: Props): JSX.Element {
             Modal.confirm({
                 title: `The task ${taskID} will be deleted`,
                 content: 'All related data (images, annotations) will be lost. Continue?',
+                className: 'cvat-modal-confirm-delete-task',
                 onOk: () => {
                     onClickMenu(copyParams);
                 },
                 okButtonProps: {
-                    type: 'danger',
+                    type: 'primary',
+                    danger: true,
                 },
                 okText: 'Delete',
             });
@@ -93,41 +99,31 @@ export default function ActionsMenuComponent(props: Props): JSX.Element {
     }
 
     return (
-        <Menu
-            selectable={false}
-            className='cvat-actions-menu'
-            onClick={onClickMenuWrapper}
-        >
-            {
-                DumpSubmenu({
-                    taskMode,
-                    dumpers,
-                    dumpActivities,
-                    menuKey: Actions.DUMP_TASK_ANNO,
-                })
-            }
-            {
-                LoadSubmenu({
-                    loaders,
-                    loadActivity,
-                    onFileUpload: (file: File): void => {
-                        onClickMenuWrapper(null, file);
-                    },
-                    menuKey: Actions.LOAD_TASK_ANNO,
-                })
-            }
-            {
-                ExportSubmenu({
-                    exporters: dumpers,
-                    exportActivities,
-                    menuKey: Actions.EXPORT_TASK_DATASET,
-                })
-            }
+        <Menu selectable={false} className='cvat-actions-menu' onClick={onClickMenuWrapper}>
+            {DumpSubmenu({
+                taskMode,
+                dumpers,
+                dumpActivities,
+                menuKey: Actions.DUMP_TASK_ANNO,
+                taskDimension,
+            })}
+            {LoadSubmenu({
+                loaders,
+                loadActivity,
+                onFileUpload: (file: File): void => {
+                    onClickMenuWrapper(null, file);
+                },
+                menuKey: Actions.LOAD_TASK_ANNO,
+                taskDimension,
+            })}
+            {ExportSubmenu({
+                exporters: dumpers,
+                exportActivities,
+                menuKey: Actions.EXPORT_TASK_DATASET,
+                taskDimension,
+            })}
             {!!bugTracker && <Menu.Item key={Actions.OPEN_BUG_TRACKER}>Open bug tracker</Menu.Item>}
-            <Menu.Item
-                disabled={inferenceIsActive}
-                key={Actions.RUN_AUTO_ANNOTATION}
-            >
+            <Menu.Item disabled={inferenceIsActive} key={Actions.RUN_AUTO_ANNOTATION}>
                 Automatic annotation
             </Menu.Item>
             <hr />

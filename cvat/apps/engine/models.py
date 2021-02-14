@@ -19,6 +19,17 @@ class SafeCharField(models.CharField):
             return value[:self.max_length]
         return value
 
+class DimensionType(str, Enum):
+    DIM_3D = '3d'
+    DIM_2D = '2d'
+
+    @classmethod
+    def choices(cls):
+        return tuple((x.value, x.name) for x in cls)
+
+    def __str__(self):
+        return self.value
+
 class StatusChoice(str, Enum):
     ANNOTATION = 'annotation'
     VALIDATION = 'validation'
@@ -54,6 +65,18 @@ class StorageMethodChoice(str, Enum):
     def __str__(self):
         return self.value
 
+class StorageChoice(str, Enum):
+    #AWS_S3 = 'aws_s3_bucket'
+    LOCAL = 'local'
+    SHARE = 'share'
+
+    @classmethod
+    def choices(cls):
+        return tuple((x.value, x.name) for x in cls)
+
+    def __str__(self):
+        return self.value
+
 class Data(models.Model):
     chunk_size = models.PositiveIntegerField(null=True)
     size = models.PositiveIntegerField(default=0)
@@ -66,6 +89,7 @@ class Data(models.Model):
     original_chunk_type = models.CharField(max_length=32, choices=DataChoice.choices(),
         default=DataChoice.IMAGESET)
     storage_method = models.CharField(max_length=15, choices=StorageMethodChoice.choices(), default=StorageMethodChoice.FILE_SYSTEM)
+    storage = models.CharField(max_length=15, choices=StorageChoice.choices(), default=StorageChoice.LOCAL)
 
     class Meta:
         default_permissions = ()
@@ -151,9 +175,24 @@ class Project(models.Model):
     status = models.CharField(max_length=32, choices=StatusChoice.choices(),
         default=StatusChoice.ANNOTATION)
 
+    def get_project_dirname(self):
+        return os.path.join(settings.PROJECTS_ROOT, str(self.id))
+
+    def get_project_logs_dirname(self):
+        return os.path.join(self.get_project_dirname(), 'logs')
+
+    def get_client_log_path(self):
+        return os.path.join(self.get_project_logs_dirname(), "client.log")
+
+    def get_log_path(self):
+        return os.path.join(self.get_project_logs_dirname(), "project.log")
+
     # Extend default permission model
     class Meta:
         default_permissions = ()
+
+    def __str__(self):
+        return self.name
 
 class Task(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE,
@@ -167,14 +206,14 @@ class Task(models.Model):
         on_delete=models.SET_NULL, related_name="assignees")
     bug_tracker = models.CharField(max_length=2000, blank=True, default="")
     created_date = models.DateTimeField(auto_now_add=True)
-    updated_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)
     overlap = models.PositiveIntegerField(null=True)
     # Zero means that there are no limits (default)
     segment_size = models.PositiveIntegerField(default=0)
-    z_order = models.BooleanField(default=False)
     status = models.CharField(max_length=32, choices=StatusChoice.choices(),
         default=StatusChoice.ANNOTATION)
     data = models.ForeignKey(Data, on_delete=models.CASCADE, null=True, related_name="tasks")
+    dimension = models.CharField(max_length=2, choices=DimensionType.choices(), default=DimensionType.DIM_2D)
 
     # Extend default permission model
     class Meta:
@@ -238,6 +277,17 @@ class RemoteFile(models.Model):
     class Meta:
         default_permissions = ()
 
+
+class RelatedFile(models.Model):
+    data = models.ForeignKey(Data, on_delete=models.CASCADE, related_name="related_files", default=1, null=True)
+    path = models.FileField(upload_to=upload_path_handler,
+                            max_length=1024, storage=MyFileSystemStorage())
+    primary_image = models.ForeignKey(Image, on_delete=models.CASCADE, related_name="related_files", null=True)
+
+    class Meta:
+        default_permissions = ()
+        unique_together = ("data", "path")
+
 class Segment(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE)
     start_frame = models.IntegerField()
@@ -249,6 +299,7 @@ class Segment(models.Model):
 class Job(models.Model):
     segment = models.ForeignKey(Segment, on_delete=models.CASCADE)
     assignee = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    reviewer = models.ForeignKey(User, null=True, blank=True, related_name='review_job_set', on_delete=models.SET_NULL)
     status = models.CharField(max_length=32, choices=StatusChoice.choices(),
         default=StatusChoice.ANNOTATION)
 
@@ -256,7 +307,8 @@ class Job(models.Model):
         default_permissions = ()
 
 class Label(models.Model):
-    task = models.ForeignKey(Task, on_delete=models.CASCADE)
+    task = models.ForeignKey(Task, null=True, blank=True, on_delete=models.CASCADE)
+    project = models.ForeignKey(Project, null=True, blank=True, on_delete=models.CASCADE)
     name = SafeCharField(max_length=64)
     color = models.CharField(default='', max_length=8)
 
@@ -312,7 +364,7 @@ class ShapeType(str, Enum):
     POLYGON = 'polygon'     # (x0, y0, ..., xn, yn)
     POLYLINE = 'polyline'   # (x0, y0, ..., xn, yn)
     POINTS = 'points'       # (x0, y0, ..., xn, yn)
-    CUBOID = 'cuboid'
+    CUBOID = 'cuboid'       # (x0, y0, ..., x7, y7)
 
     @classmethod
     def choices(cls):
@@ -324,6 +376,18 @@ class ShapeType(str, Enum):
 class SourceType(str, Enum):
     AUTO = 'auto'
     MANUAL = 'manual'
+
+    @classmethod
+    def choices(self):
+        return tuple((x.value, x.name) for x in self)
+
+    def __str__(self):
+        return self.value
+
+class ReviewStatus(str, Enum):
+    ACCEPTED = 'accepted'
+    REJECTED = 'rejected'
+    REVIEW_FURTHER = 'review_further'
 
     @classmethod
     def choices(self):
@@ -412,3 +476,31 @@ class TrackedShape(Shape):
 
 class TrackedShapeAttributeVal(AttributeVal):
     shape = models.ForeignKey(TrackedShape, on_delete=models.CASCADE)
+
+class Profile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    rating = models.FloatField(default=0.0)
+
+class Review(models.Model):
+    job = models.ForeignKey(Job, on_delete=models.CASCADE)
+    reviewer = models.ForeignKey(User, null=True, blank=True, related_name='reviews', on_delete=models.SET_NULL)
+    assignee = models.ForeignKey(User, null=True, blank=True, related_name='reviewed', on_delete=models.SET_NULL)
+    estimated_quality = models.FloatField()
+    status = models.CharField(max_length=16, choices=ReviewStatus.choices())
+
+class Issue(models.Model):
+    frame = models.PositiveIntegerField()
+    position = FloatArrayField()
+    job = models.ForeignKey(Job, on_delete=models.CASCADE)
+    review = models.ForeignKey(Review, null=True, blank=True, on_delete=models.SET_NULL)
+    owner = models.ForeignKey(User, null=True, blank=True, related_name='issues', on_delete=models.SET_NULL)
+    resolver = models.ForeignKey(User, null=True, blank=True, related_name='resolved_issues', on_delete=models.SET_NULL)
+    created_date = models.DateTimeField(auto_now_add=True)
+    resolved_date = models.DateTimeField(null=True, blank=True)
+
+class Comment(models.Model):
+    issue = models.ForeignKey(Issue, on_delete=models.CASCADE)
+    author = models.ForeignKey(User, null=True, blank=True, on_delete=models.SET_NULL)
+    message = models.TextField(default='')
+    created_date = models.DateTimeField(auto_now_add=True)
+    updated_date = models.DateTimeField(auto_now=True)

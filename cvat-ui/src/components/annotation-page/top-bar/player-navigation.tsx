@@ -1,16 +1,17 @@
-// Copyright (C) 2020 Intel Corporation
+// Copyright (C) 2020-2021 Intel Corporation
 //
 // SPDX-License-Identifier: MIT
 
 import React, { useState, useEffect } from 'react';
 
 import { Row, Col } from 'antd/lib/grid';
-import Icon from 'antd/lib/icon';
-import Slider, { SliderValue } from 'antd/lib/slider';
-import Tooltip from 'antd/lib/tooltip';
+import { LinkOutlined } from '@ant-design/icons';
+import Slider from 'antd/lib/slider';
 import InputNumber from 'antd/lib/input-number';
+import Input from 'antd/lib/input';
 import Text from 'antd/lib/typography/Text';
 
+import CVATTooltip from 'components/common/cvat-tooltip';
 import { clamp } from 'utils/math';
 
 interface Props {
@@ -19,8 +20,8 @@ interface Props {
     frameNumber: number;
     frameFilename: string;
     focusFrameInputShortcut: string;
-    inputFrameRef: React.RefObject<InputNumber>;
-    onSliderChange(value: SliderValue): void;
+    inputFrameRef: React.RefObject<Input>;
+    onSliderChange(value: number): void;
     onInputChange(value: number): void;
     onURLIconClick(): void;
 }
@@ -49,7 +50,7 @@ function PlayerNavigation(props: Props): JSX.Element {
     return (
         <>
             <Col className='cvat-player-controls'>
-                <Row type='flex'>
+                <Row align='bottom'>
                     <Col>
                         <Slider
                             className='cvat-player-slider'
@@ -60,30 +61,29 @@ function PlayerNavigation(props: Props): JSX.Element {
                         />
                     </Col>
                 </Row>
-                <Row type='flex' justify='center'>
+                <Row justify='center'>
                     <Col className='cvat-player-filename-wrapper'>
-                        <Tooltip title={frameFilename} mouseLeaveDelay={0}>
+                        <CVATTooltip title={frameFilename}>
                             <Text type='secondary'>{frameFilename}</Text>
-                        </Tooltip>
+                        </CVATTooltip>
                     </Col>
                     <Col offset={1}>
-                        <Tooltip title='Create frame URL' mouseLeaveDelay={0}>
-                            <Icon className='cvat-player-frame-url-icon' type='link' onClick={onURLIconClick} />
-                        </Tooltip>
+                        <CVATTooltip title='Create frame URL'>
+                            <LinkOutlined className='cvat-player-frame-url-icon' onClick={onURLIconClick} />
+                        </CVATTooltip>
                     </Col>
                 </Row>
             </Col>
             <Col>
-                <Tooltip title={`Press ${focusFrameInputShortcut} to focus here`} mouseLeaveDelay={0}>
+                <CVATTooltip title={`Press ${focusFrameInputShortcut} to focus here`}>
                     <InputNumber
+                        ref={inputFrameRef}
                         className='cvat-player-frame-selector'
                         type='number'
                         value={frameInputValue}
-                        onChange={(value: number | undefined) => {
-                            if (typeof (value) === 'number') {
-                                setFrameInputValue(Math.floor(
-                                    clamp(value, startFrame, stopFrame),
-                                ));
+                        onChange={(value: number | undefined | string | null) => {
+                            if (typeof value !== 'undefined' && value !== null) {
+                                setFrameInputValue(Math.floor(clamp(+value, startFrame, stopFrame)));
                             }
                         }}
                         onBlur={() => {
@@ -92,9 +92,8 @@ function PlayerNavigation(props: Props): JSX.Element {
                         onPressEnter={() => {
                             onInputChange(frameInputValue);
                         }}
-                        ref={inputFrameRef}
                     />
-                </Tooltip>
+                </CVATTooltip>
             </Col>
         </>
     );
